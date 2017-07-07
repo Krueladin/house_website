@@ -3,12 +3,6 @@ import json
 import requests
 import torrent
 
-class TorrentNotFoundException(Exception):
-	"""An exception thrown when an operation is performed on a torrent object that 
-	does not exist.
-	""" 
-	pass
-
 class InvalidTransmissionQuery(Exception):
     """An exception thrown when a query is improperly structured when passed to the
     TransmissionClient
@@ -54,14 +48,31 @@ class TransmissionClient(object):
 
         # Action Requests 
         def start_torrents(self, t_ids=[]):
+            """Starts the torrent files of the associated ids passed in.
+
+            t_ids ([]int) -- The array of torrent ids to begin torrenting.
+
+            Returns True if the torrenting has begun, false otherwise.
+            """
             data = {}
             if t_ids == []:
                 data["arguments"] = {}
             else:
-                data["ids"] = t_ids
+                data["arguments"] = { "ids": t_ids }
             data["method"] = "torrent-start"
+            response = self._post_request(json.dumps(data))
+            if json.loads(response.text)["result"] == "success":
+                return True
+            else:
+                return False
         
-        def stop_torrent(self, t_id):
+        def stop_torrents(self, t_ids=[]):
+            """Stops the torrent files of the associated ids passed in.
+
+            t_ids ([]int) -- The array of torrent ids to stop torrenting.
+
+            Returns True if the torrenting has halted, false otherwise.
+            """
             data = {}
             if t_ids == []:
                 data["arguments"] = {}
@@ -70,12 +81,19 @@ class TransmissionClient(object):
                         "ids": t_ids,
                 }
             data["method"] = "torrent-stop"
-
+            response = self._post_request(json.dumps(data))
+            if json.loads(response.text)["result"] == "success":
+                return True
+            else:
+                return False
+        
 	def get_torrents(self, t_ids=[], fields=["id", "name", "totalSize"]):
             """Returns the specified torrent file(s). If none are specified, returns all.
 
             t_ids ([]int) -- An array of torrent ids.
             fields ([]string) -- An array of strings indicating the desired attributes of a torrent file(s) to return. Must be of length greater than 1.
+            
+            Throws an exception if there is an insufficient number of fields specified.
             """
             if len(fields) < 1:
                 raise InvalidTransmissionQuery("invalid 'torrent-get' query")
@@ -98,9 +116,57 @@ class TransmissionClient(object):
                 torrents.append(torrent.Torrent(data=torr))
             return torrents
 
-	def add_torrents(self):
-		pass
+        def add_torrents(self, filenames, download_dir=""):
+            """Adds torrent(s) to the torrent list on the Transmission client.
+            
+            filenames ([]string) -- An array of filenames or URLs of the .torrent content.
+
+            Returns an array of information, cooresponding to the filename indices attempted to add, 
+            and the returned content of the query.
+            """
+            result = []
+            for filename in filenames:
+                result.append(self.add_torrent(filename))
+            return result
+
+	def add_torrent(self, filename, download_dir=""):
+            """Adds a torrent to the torrent list on the Transmission client.
+            
+            filename (string) -- The filename or URL of the .torrent content.
+            
+            Returns the information returned about the file or url by Tramsmission.
+            """
+            data = {}
+            data["arguments"] = { 
+                    "filename": filename,
+                    "paused": True,
+                    "download-dir": download_dir,
+            }
+            data["method"] = "torrent-add"
+            response = self._post_request(json.dumps(data))
+            return response.text
 
 	def delete_torrents(self, t_ids, delete_local_data=False):
-		pass
+            """Removes a torrent from the torrent list on the Transmission client.
+
+            t_ids ([]int) -- An array of torrent ids.
+            delete-local-data (bool) -- Indicates whether the file should be deleted locally.
+
+            Throws an exception if there is an insufficient number of torrent ids to delete.
+            Returns true if the removal was successful, false otherwise.
+            """
+            if len(t_ids) < 1:
+                raise InvalidTransmissionQuery("invalid 'torrent-remove' query")
+           
+            data = {}
+            data["arguments"] = { 
+                    "ids": t_ids,
+                    "delete-local-data": delete_local_data,
+            }
+            data["method"] = "torrent-remove"
+            response = self._post_request(json.dumps(data))
+            if json.loads(response.text)["result"] == "success":
+                return True
+            else:
+                return False
 	
